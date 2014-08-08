@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, DataKinds, KindSignatures, StandaloneDeriving, RankNTypes, DeriveDataTypeable, FlexibleInstances, MagicHash #-}
+{-# LANGUAGE CPP, GADTs, DataKinds, KindSignatures, StandaloneDeriving, RankNTypes, DeriveDataTypeable, FlexibleInstances, MagicHash #-}
 module Data.FilePath (Path, From, FilePath(..), rootPath, relativePath, (</>), mkDirPath, mkFilePath, mkFullFilePath, showp, dirpathQ, filepathQ) where
 
 import Prelude hiding (FilePath)
@@ -17,6 +17,7 @@ data FilePath (a :: From) (b :: Path) where
   RelativePath  :: FilePath Relative Directory
   FilePath      :: FilePath a Directory -> String -> FilePath a File
   DirectoryPath :: FilePath a Directory -> String -> FilePath a Directory
+
 
 -- Path API
 rootPath :: FilePath Root Directory
@@ -172,6 +173,7 @@ cDirectoryPath
   = mkConstr
       (tFilePath) "DirectoryPath" [] Prefix
 
+#if (__GLASGOW_HASKELL__==706)
 {-# NOINLINE fTyCon #-}
 fTyCon :: TyCon
 fTyCon = mkTyCon3 "main" "Data.FilePath" "FilePath"
@@ -187,3 +189,11 @@ instance Typeable (FilePath Relative File) where
 
 instance Typeable (FilePath Root File) where
   typeOf _ = mkTyConApp fTyCon []
+#endif
+#if (__GLASGOW_HASKELL__==708)
+deriving instance Typeable Directory
+deriving instance Typeable Relative
+deriving instance Typeable Root
+deriving instance Typeable File
+deriving instance Typeable FilePath
+#endif
