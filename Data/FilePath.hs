@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, GADTs, DataKinds, KindSignatures, StandaloneDeriving, RankNTypes, DeriveDataTypeable, FlexibleInstances, MagicHash #-}
-module Data.FilePath (Path, From, FilePath(..), rootPath, relativePath, (</>), mkDirPath, mkFilePath, mkFullFilePath, showp, dirpathQ, filepathQ) where
+module Data.FilePath (Path(..), From(..), FilePath, rootPath, relativePath, (</>), mkDirPath, mkFilePath, mkRootFilePathBase, mkFullFilePath, showp, dirpathQ, filepathQ) where
 
 import Prelude hiding (FilePath)
 import Data.Data
@@ -37,6 +37,16 @@ mkDirPath s = DirectoryPath RelativePath `fmap` (mkf s)
 
 mkFilePath :: String -> Maybe (FilePath Relative File)
 mkFilePath s = FilePath RelativePath `fmap` (mkf s)
+
+mkRootFilePathBase :: String -> Maybe (FilePath Root Directory)
+mkRootFilePathBase ('/':s) = do
+  ys <- xs
+  return $ foldl (</>) (RootPath) ys
+  where
+    ss = splitOn "/" s
+    xs = sequence $ map mkDirPath $ filter (not . null) ss
+mkRootFilePathBase _ = Nothing -- all full file paths must start from /
+
 
 mkFullFilePath :: String -> Maybe (FilePath Root File)
 mkFullFilePath ('/':s) = do
