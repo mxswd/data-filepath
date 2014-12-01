@@ -1,0 +1,6 @@
+# cabal sandbox
+.cabal-sandbox/
+cabal.sandbox.config
+
+# configuration and build output
+dist/
