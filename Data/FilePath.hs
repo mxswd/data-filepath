@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, GADTs, DataKinds, KindSignatures, StandaloneDeriving, RankNTypes, DeriveDataTypeable, FlexibleInstances, MagicHash #-}
-module Data.FilePath (Path, From, FilePath(..), rootPath, relativePath, (</>), mkDirPath, mkFilePath, mkFullFilePath, showp, dirpathQ, filepathQ) where
+module Data.FilePath (Path(..), From(..), FilePath(..), rootPath, relativePath, (</>), mkDirPath, mkFilePath, mkFullFilePath, showp, dirpathQ, filepathQ) where
 
 import Prelude hiding (FilePath)
 import Data.Data
