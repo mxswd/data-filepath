@@ -1,5 +1,21 @@
 {-# LANGUAGE CPP, GADTs, DataKinds, KindSignatures, StandaloneDeriving, RankNTypes, DeriveDataTypeable, FlexibleInstances, MagicHash #-}
-module Data.FilePath (Path(..), From(..), FilePath, rootPath, relativePath, (</>), mkDirPath, mkFilePath, mkRootFilePathBase, mkFullFilePath, showp, dirpathQ, filepathQ) where
+module Data.FilePath
+    (   Path(..)
+    ,   From(..)
+    ,   FilePath
+    ,   (</>)
+    ,   rootPath
+    ,   relativePath
+    ,   mkDirPath
+    ,   mkFilePath
+    ,   mkRootFilePathBase
+    ,   mkFullFilePath
+    ,   dirname
+    ,   basename
+    ,   showp
+    ,   dirpathQ
+    ,   filepathQ
+    ) where
 
 import Prelude hiding (FilePath)
 import Data.Data
@@ -33,18 +49,18 @@ p </> (DirectoryPath u s) = DirectoryPath (p </> u) s
 p </> (FilePath u s) = FilePath (p </> u) s
 
 mkDirPath :: String -> Maybe (FilePath Relative Directory)
-mkDirPath s = DirectoryPath RelativePath `fmap` (mkf s)
+mkDirPath s = DirectoryPath RelativePath `fmap` mkf s
 
 mkFilePath :: String -> Maybe (FilePath Relative File)
-mkFilePath s = FilePath RelativePath `fmap` (mkf s)
+mkFilePath s = FilePath RelativePath `fmap` mkf s
 
 mkRootFilePathBase :: String -> Maybe (FilePath Root Directory)
 mkRootFilePathBase ('/':s) = do
   ys <- xs
-  return $ foldl (</>) (RootPath) ys
+  return $ foldl (</>) RootPath ys
   where
     ss = splitOn "/" s
-    xs = sequence $ map mkDirPath $ filter (not . null) ss
+    xs = mapM mkDirPath $ filter (not . null) ss
 mkRootFilePathBase _ = Nothing -- all full file paths must start from /
 
 
@@ -52,12 +68,18 @@ mkFullFilePath :: String -> Maybe (FilePath Root File)
 mkFullFilePath ('/':s) = do
   y <- x
   ys <- xs
-  return $ foldl (</>) (RootPath) ys </> y
+  return $ foldl (</>) RootPath ys </> y
   where
     ss = splitOn "/" s
-    xs = sequence $ map mkDirPath $ init ss
+    xs = mapM mkDirPath $ init ss
     x  = mkFilePath $ last ss
 mkFullFilePath _ = Nothing -- all full file paths must start from /
+
+dirname :: FilePath a File -> FilePath a Directory
+dirname (FilePath dir _) = dir
+
+basename :: FilePath a File -> String
+basename (FilePath _ bname) = bname
 
 showp :: FilePath a b -> String
 showp RootPath = ""
@@ -100,18 +122,18 @@ instance Data
     k_aFo
     z_aFp
     (DirectoryPath a1_aFq a2_aFr)
-    = ((z_aFp DirectoryPath `k_aFo` a1_aFq)
-       `k_aFo` a2_aFr)
+    = (z_aFp DirectoryPath `k_aFo` a1_aFq)
+       `k_aFo` a2_aFr
   gunfold k_aFs z_aFt c_aFu
     = case constrIndex c_aFu of
         GHC.Types.I# 2# -> z_aFt RelativePath
         GHC.Types.I# 4# -> k_aFs (k_aFs (z_aFt DirectoryPath))
         _ -> error "impossible"
   toConstr RelativePath
-    = (cRelativePath)
+    = cRelativePath
   toConstr (DirectoryPath _ _)
-    = (cDirectoryPath)
-  dataTypeOf _ = (tFilePath)
+    = cDirectoryPath
+  dataTypeOf _ = tFilePath
 
 instance Data
            (FilePath
@@ -122,43 +144,43 @@ instance Data
     k_aFD
     z_aFE
     (DirectoryPath a1_aFF a2_aFG)
-    = ((z_aFE DirectoryPath `k_aFD` a1_aFF)
-       `k_aFD` a2_aFG)
+    = (z_aFE DirectoryPath `k_aFD` a1_aFF)
+       `k_aFD` a2_aFG
   gunfold k_aFH z_aFI c_aFJ
     = case constrIndex c_aFJ of
         GHC.Types.I# 1# -> z_aFI RootPath
         GHC.Types.I# 4# -> k_aFH (k_aFH (z_aFI DirectoryPath))
         _ -> error "impossible"
   toConstr RootPath
-    = (cRootPath)
+    = cRootPath
   toConstr (DirectoryPath _ _)
-    = (cDirectoryPath)
-  dataTypeOf _ = (tFilePath)
+    = cDirectoryPath
+  dataTypeOf _ = tFilePath
 
 instance Data
            (FilePath
               Relative File) where
   gfoldl k_aFO z_aFP (FilePath a1_aFQ a2_aFR)
-    = ((z_aFP FilePath `k_aFO` a1_aFQ) `k_aFO` a2_aFR)
+    = (z_aFP FilePath `k_aFO` a1_aFQ) `k_aFO` a2_aFR
   gunfold k_aFW z_aFX c_aFY
     = case constrIndex c_aFY of
         GHC.Types.I# 3# -> k_aFW (k_aFW (z_aFX FilePath))
         _ -> error "impossible"
   toConstr (FilePath _ _)
-    = (cFilePath)
-  dataTypeOf _ = (tFilePath)
+    = cFilePath
+  dataTypeOf _ = tFilePath
 
 instance Data
            (FilePath Root File) where
   gfoldl k_aG3 z_aG4 (FilePath a1_aG5 a2_aG6)
-    = ((z_aG4 FilePath `k_aG3` a1_aG5) `k_aG3` a2_aG6)
+    = (z_aG4 FilePath `k_aG3` a1_aG5) `k_aG3` a2_aG6
   gunfold k_aGb z_aGc c_aGd
     = case constrIndex c_aGd of
         GHC.Types.I# 3# -> k_aGb (k_aGb (z_aGc FilePath))
         _ -> error "impossible"
   toConstr (FilePath _ _)
-    = (cFilePath)
-  dataTypeOf _ = (tFilePath)
+    = cFilePath
+  dataTypeOf _ = tFilePath
 
 tFilePath :: DataType
 cRootPath :: Constr
@@ -168,20 +190,20 @@ cDirectoryPath :: Constr
 tFilePath
   = mkDataType
       "FilePath"
-      [(cRootPath), (cRelativePath),
-       (cFilePath), (cDirectoryPath)]
+      [cRootPath, cRelativePath,
+       cFilePath, cDirectoryPath]
 cRootPath
   = mkConstr
-      (tFilePath) "RootPath" [] Prefix
+      tFilePath "RootPath" [] Prefix
 cRelativePath
   = mkConstr
-      (tFilePath) "RelativePath" [] Prefix
+      tFilePath "RelativePath" [] Prefix
 cFilePath
   = mkConstr
-      (tFilePath) "FilePath" [] Prefix
+      tFilePath "FilePath" [] Prefix
 cDirectoryPath
   = mkConstr
-      (tFilePath) "DirectoryPath" [] Prefix
+      tFilePath "DirectoryPath" [] Prefix
 
 #if (__GLASGOW_HASKELL__==706)
 {-# NOINLINE fTyCon #-}
