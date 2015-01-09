@@ -205,7 +205,7 @@ cDirectoryPath
   = mkConstr
       tFilePath "DirectoryPath" [] Prefix
 
-#if (__GLASGOW_HASKELL__==706)
+#if __GLASGOW_HASKELL__ == 706
 {-# NOINLINE fTyCon #-}
 fTyCon :: TyCon
 fTyCon = mkTyCon3 "main" "Data.FilePath" "FilePath"
@@ -222,7 +222,7 @@ instance Typeable (FilePath Relative File) where
 instance Typeable (FilePath Root File) where
   typeOf _ = mkTyConApp fTyCon []
 #endif
-#if (__GLASGOW_HASKELL__==708)
+#if __GLASGOW_HASKELL__ == 708 || __GLASGOW_HASKELL__ == 710
 deriving instance Typeable Directory
 deriving instance Typeable Relative
 deriving instance Typeable Root
