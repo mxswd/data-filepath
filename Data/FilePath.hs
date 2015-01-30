@@ -3,6 +3,7 @@ module Data.FilePath
     (   Path(..)
     ,   From(..)
     ,   PathSegment
+    ,   segString
     ,   mkPathSegment
     ,   FilePath
     ,   (</>)
@@ -33,7 +34,7 @@ import GHC.Types
 -- two \'\/\' characters.  Valid path segments cannot contain \'\/\' or control
 -- characters.  PathSegments are also monoids to allow mappending with
 -- prefixes/suffixes.
-newtype PathSegment = PathSegment { unSegment :: String }
+newtype PathSegment = PathSegment { segString :: String }
   deriving (Eq,Show,Typeable,Data)
 
 instance Monoid PathSegment where
@@ -105,8 +106,8 @@ mkFullFilePath _ = Nothing -- all full file paths must start from /
 dirname :: FilePath a File -> FilePath a Directory
 dirname (FilePath dir _) = dir
 
-basename :: FilePath a File -> String
-basename (FilePath _ (PathSegment bname)) = bname
+basename :: FilePath a File -> PathSegment
+basename (FilePath _ bname) = bname
 
 showp :: FilePath a b -> String
 showp RootPath = ""
