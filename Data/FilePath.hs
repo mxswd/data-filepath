@@ -106,8 +106,11 @@ mkFullFilePath _ = Nothing -- all full file paths must start from /
 dirname :: FilePath a File -> FilePath a Directory
 dirname (FilePath dir _) = dir
 
-basename :: FilePath a File -> PathSegment
-basename (FilePath _ bname) = bname
+basename :: FilePath a File -> String
+basename (FilePath _ (PathSegment bname)) = bname
+
+basenameSeg :: FilePath a File -> PathSegment
+basenameSeg (FilePath _ bname) = bname
 
 showp :: FilePath a b -> String
 showp RootPath = ""
