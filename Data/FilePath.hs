@@ -2,6 +2,8 @@
 module Data.FilePath
     (   Path(..)
     ,   From(..)
+    ,   PathSegment
+    ,   mkPathSegment
     ,   FilePath
     ,   (</>)
     ,   rootPath
@@ -22,17 +24,36 @@ import Data.Data
 import Data.Char
 import Data.List.Split
 import Data.Maybe (fromJust)
+import Data.Monoid
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
 import GHC.Types
+
+-- | A PathSegment is any single element of a path...i.e. the stuff between
+-- two \'\/\' characters.  Valid path segments cannot contain \'\/\' or control
+-- characters.  PathSegments are also monoids to allow mappending with
+-- prefixes/suffixes.
+newtype PathSegment = PathSegment { unSegment :: String }
+  deriving (Eq,Show,Typeable,Data)
+
+instance Monoid PathSegment where
+  mempty = PathSegment ""
+  mappend (PathSegment a) (PathSegment b) = PathSegment (a<>b)
+
+-- | Smart constructor for valid PathSegments.  Valid path segments cannot
+-- contain front slashes or control characters.
+mkPathSegment :: String -> Maybe PathSegment
+mkPathSegment s = if any (\x -> x == '/' || isControl x) s
+  then Nothing
+  else Just $ PathSegment s
 
 data Path = File | Directory
 data From = Root | Relative
 data FilePath (a :: From) (b :: Path) where
   RootPath      :: FilePath Root Directory
   RelativePath  :: FilePath Relative Directory
-  FilePath      :: FilePath a Directory -> String -> FilePath a File
-  DirectoryPath :: FilePath a Directory -> String -> FilePath a Directory
+  FilePath      :: FilePath a Directory -> PathSegment -> FilePath a File
+  DirectoryPath :: FilePath a Directory -> PathSegment -> FilePath a Directory
 
 
 -- Path API
@@ -48,11 +69,17 @@ p </> RelativePath = p
 p </> (DirectoryPath u s) = DirectoryPath (p </> u) s
 p </> (FilePath u s) = FilePath (p </> u) s
 
+-- | Smart constructor for directories.  Valid directories must be valid
+-- PathSegments and also cannot be empty strings.
 mkDirPath :: String -> Maybe (FilePath Relative Directory)
-mkDirPath s = DirectoryPath RelativePath `fmap` mkf s
+mkDirPath "" = Nothing -- an empty string is an invalid dir name
+mkDirPath s = DirectoryPath RelativePath `fmap` mkPathSegment s
 
+-- | Smart constructor for files.  Valid files must be valid PathSegments and
+-- also cannot be empty strings.
 mkFilePath :: String -> Maybe (FilePath Relative File)
-mkFilePath s = FilePath RelativePath `fmap` mkf s
+mkFilePath "" = Nothing -- an empty string is an invalid file name
+mkFilePath s = FilePath RelativePath `fmap` mkPathSegment s
 
 mkRootFilePathBase :: String -> Maybe (FilePath Root Directory)
 mkRootFilePathBase ('/':s) = do
@@ -79,33 +106,35 @@ dirname :: FilePath a File -> FilePath a Directory
 dirname (FilePath dir _) = dir
 
 basename :: FilePath a File -> String
-basename (FilePath _ bname) = bname
+basename (FilePath _ (PathSegment bname)) = bname
 
 showp :: FilePath a b -> String
 showp RootPath = ""
 showp RelativePath = "."
-showp (DirectoryPath u s) = showp u ++ "/" ++ s
-showp (FilePath u s) = showp u ++ "/" ++ s
+showp (DirectoryPath u (PathSegment s)) = showp u ++ "/" ++ s
+showp (FilePath u (PathSegment s)) = showp u ++ "/" ++ s
 
-mkf :: String -> Maybe String
-mkf "" = Nothing -- an empty string is an invalid file/dir name
-mkf s = if any (\x -> x == '/' || isControl x) s
-  then Nothing
-  else Just s
+-- TODO: could it split the delimiters?
+segQ :: QuasiQuoter
+segQ = QuasiQuoter qExp qPat (error "path segments are not types") (error "path segments are not decs")
+  where
+    qExp :: String -> ExpQ
+    qExp s = dataToExpQ (const Nothing) (fromJust (mkPathSegment s) :: PathSegment)
+    qPat = undefined
 
 -- TODO: could it split the delimiters?
 dirpathQ :: QuasiQuoter
 dirpathQ = QuasiQuoter qExp qPat (error "dir paths are not types") (error "dir paths are not decs")
   where
     qExp :: String -> ExpQ
-    qExp s = dataToExpQ (const Nothing) (DirectoryPath RelativePath (fromJust (mkf s)) :: FilePath Relative Directory)
+    qExp s = dataToExpQ (const Nothing) (fromJust (mkDirPath s) :: FilePath Relative Directory)
     qPat = undefined
 
 filepathQ :: QuasiQuoter
 filepathQ = QuasiQuoter qExp qPat (error "file paths are not types") (error "file paths are not decs")
   where
     qExp :: String -> ExpQ
-    qExp s = dataToExpQ (const Nothing) (FilePath RelativePath (fromJust (mkf s)) :: FilePath Relative File)
+    qExp s = dataToExpQ (const Nothing) (fromJust (mkFilePath s) :: FilePath Relative File)
     qPat = undefined
 
 -- data / typeable
