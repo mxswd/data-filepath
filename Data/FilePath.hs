@@ -34,12 +34,20 @@ import GHC.Types
 -- two \'\/\' characters.  Valid path segments cannot contain \'\/\' or control
 -- characters.  PathSegments are also monoids to allow mappending with
 -- prefixes/suffixes.
-newtype PathSegment = PathSegment { segString :: String }
+newtype PathSegment = PathSegment { _segString :: String }
   deriving (Eq,Show,Typeable,Data)
 
 instance Monoid PathSegment where
   mempty = PathSegment ""
   mappend (PathSegment a) (PathSegment b) = PathSegment (a<>b)
+
+-- For the motivation behind taking the time and characters to write `segString` instead of just exporting `_segString` pls see <https://github.com/maxpow4h/data-filepath/pull/6>
+
+-- |
+-- Every `PathSegment` is a valid string
+--
+segString :: PathSegment -> String
+segString = _segString
 
 -- | Smart constructor for valid PathSegments.  Valid path segments cannot
 -- contain front slashes or control characters.
