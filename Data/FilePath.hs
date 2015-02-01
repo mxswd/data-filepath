@@ -15,7 +15,9 @@ module Data.FilePath
     ,   mkFullFilePath
     ,   dirname
     ,   basename
+    ,   basenameSeg
     ,   showp
+    ,   segQ
     ,   dirpathQ
     ,   filepathQ
     ) where
@@ -38,8 +40,8 @@ newtype PathSegment = PathSegment { _segString :: String }
   deriving (Eq,Show,Typeable,Data)
 
 instance Monoid PathSegment where
-  mempty = PathSegment ""
-  mappend (PathSegment a) (PathSegment b) = PathSegment (a<>b)
+  mempty = PathSegment mempty
+  mappend (PathSegment a) (PathSegment b) = PathSegment $ a <> b
 
 -- For the motivation behind taking the time and characters to write `segString` instead of just exporting `_segString` pls see <https://github.com/maxpow4h/data-filepath/pull/6>
 
