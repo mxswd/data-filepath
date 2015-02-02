@@ -10,7 +10,9 @@ module Data.FilePath
     ,   rootPath
     ,   relativePath
     ,   mkDirPath
+    ,   mkDirPathSeg
     ,   mkFilePath
+    ,   mkFilePathSeg
     ,   mkRootFilePathBase
     ,   mkFullFilePath
     ,   dirname
@@ -27,7 +29,7 @@ import Data.Data
 import Data.Char
 import Data.List.Split
 import Data.Maybe (fromJust)
-import Data.Monoid
+import Data.Semigroup ( Semigroup(..) )
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
 import GHC.Types
@@ -39,9 +41,8 @@ import GHC.Types
 newtype PathSegment = PathSegment { _segString :: String }
   deriving (Eq,Show,Typeable,Data)
 
-instance Monoid PathSegment where
-  mempty = PathSegment mempty
-  mappend (PathSegment a) (PathSegment b) = PathSegment $ a <> b
+instance Semigroup PathSegment where
+  (PathSegment a) <> (PathSegment b) = PathSegment $ a <> b
 
 -- For the motivation behind taking the time and characters to write `segString` instead of just exporting `_segString` pls see <https://github.com/maxpow4h/data-filepath/pull/6>
 
@@ -53,10 +54,16 @@ segString = _segString
 
 -- | Smart constructor for valid PathSegments.  Valid path segments cannot
 -- contain front slashes or control characters.
+-- This function performs __all__ the checks up front.
+--
+-- * Is the string non-empty?
+-- * Does the string contain forward slashes or control characters?
+--
 mkPathSegment :: String -> Maybe PathSegment
-mkPathSegment s = if any (\x -> x == '/' || isControl x) s
-  then Nothing
-  else Just $ PathSegment s
+mkPathSegment s
+    | any (\x -> x == '/' || isControl x) s = Nothing
+    | null s                                = Nothing
+    | otherwise                             = Just $ PathSegment s
 
 data Path = File | Directory
 data From = Root | Relative
@@ -83,14 +90,22 @@ p </> (FilePath u s) = FilePath (p </> u) s
 -- | Smart constructor for directories.  Valid directories must be valid
 -- PathSegments and also cannot be empty strings.
 mkDirPath :: String -> Maybe (FilePath Relative Directory)
-mkDirPath "" = Nothing -- an empty string is an invalid dir name
-mkDirPath s = DirectoryPath RelativePath `fmap` mkPathSegment s
+mkDirPath = fmap mkDirPathSeg . mkPathSegment
+
+-- | This function basically defines what the `PathSegment` type is semantically.
+-- It is string like thing which you can safely create a path from.
+-- See `mkPathSegment`, `mkFilePathSeg`
+--
+mkDirPathSeg :: PathSegment -> FilePath Relative Directory
+mkDirPathSeg = DirectoryPath relativePath
 
 -- | Smart constructor for files.  Valid files must be valid PathSegments and
 -- also cannot be empty strings.
 mkFilePath :: String -> Maybe (FilePath Relative File)
-mkFilePath "" = Nothing -- an empty string is an invalid file name
-mkFilePath s = FilePath RelativePath `fmap` mkPathSegment s
+mkFilePath = fmap mkFilePathSeg .  mkPathSegment
+
+mkFilePathSeg :: PathSegment -> FilePath Relative File
+mkFilePathSeg = FilePath relativePath
 
 mkRootFilePathBase :: String -> Maybe (FilePath Root Directory)
 mkRootFilePathBase ('/':s) = do
