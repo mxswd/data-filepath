@@ -36,7 +36,7 @@ import GHC.Types
 
 -- | A PathSegment is any single element of a path...i.e. the stuff between
 -- two \'\/\' characters.  Valid path segments cannot contain \'\/\' or control
--- characters.  PathSegments are also monoids to allow mappending with
+-- characters.  PathSegments are also semigroups to allow concatenating with
 -- prefixes/suffixes.
 newtype PathSegment = PathSegment { _segString :: String }
   deriving (Eq,Show,Typeable,Data)
@@ -72,6 +72,14 @@ data FilePath (a :: From) (b :: Path) where
   RelativePath  :: FilePath Relative Directory
   FilePath      :: FilePath a Directory -> PathSegment -> FilePath a File
   DirectoryPath :: FilePath a Directory -> PathSegment -> FilePath a Directory
+
+
+instance Eq (FilePath a b) where
+    RootPath == RootPath = True
+    RelativePath == RelativePath = True
+    FilePath a b == FilePath c d = a == c && b == d
+    DirectoryPath a b == DirectoryPath c d = a == c && b == d
+    _ == _ = False
 
 
 -- Path API
