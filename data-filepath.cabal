@@ -22,6 +22,7 @@ library
   exposed-modules:      Data.FilePath
   other-extensions:     CPP, GADTs, DataKinds, KindSignatures, StandaloneDeriving, RankNTypes, DeriveDataTypeable, FlexibleInstances, MagicHash
   build-depends:        base                >= 4.6 && < 4.9
+                    ,   bifunctors          == 4.2.*
                     ,   semigroups          == 0.16.*
                     ,   split               >= 0.2 && < 0.3
                     ,   template-haskell

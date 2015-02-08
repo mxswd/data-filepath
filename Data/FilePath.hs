@@ -1,34 +1,49 @@
 {-# LANGUAGE CPP, GADTs, DataKinds, KindSignatures, StandaloneDeriving, RankNTypes, DeriveDataTypeable, FlexibleInstances, MagicHash #-}
-module Data.FilePath
-    (   Path(..)
+module Data.FilePath(
+    -- * Types
+        Path(..)
     ,   From(..)
     ,   PathSegment
+    ,   FilePath
+    ,   FilePathParseError
+    ,   WeakFilePath
+    -- * Functions
+    ,   filePathParseError
+    ,   weakFilePath
+    ,   rootFromWeak
+    ,   relativeFromWeak
     ,   segString
     ,   mkPathSegment
-    ,   FilePath
     ,   (</>)
     ,   rootPath
     ,   relativePath
+    ,   parseDirectory
+    ,   parseFilePath
     ,   mkDirPath
     ,   mkDirPathSeg
     ,   mkFilePath
     ,   mkFilePathSeg
-    ,   mkRootFilePathBase
-    ,   mkFullFilePath
     ,   dirname
     ,   basename
     ,   basenameSeg
     ,   showp
+    -- * Quasi Quoters
     ,   segQ
     ,   dirpathQ
     ,   filepathQ
     ) where
 
-import Prelude hiding (FilePath)
-import Data.Data
+import Prelude hiding ( FilePath, init, last )
+import Control.Applicative ( pure )
+import Data.Bifunctor ( first )
 import Data.Char
-import Data.List.Split
-import Data.Maybe (fromJust)
+import Data.Data
+import Data.Either ( partitionEithers )
+import Data.Functor ( (<$>) )
+import Data.List ( intercalate )
+import Data.List.Split ( splitOn, wordsBy )
+import Data.List.NonEmpty ( NonEmpty(..), init, last, nonEmpty )
+import Data.Maybe ( fromJust )
 import Data.Semigroup ( Semigroup(..) )
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
@@ -65,6 +80,12 @@ mkPathSegment s
     | null s                                = Nothing
     | otherwise                             = Just $ PathSegment s
 
+-- |
+-- If the string is a valid path segment, returns the string otherwise
+-- returns the original string unchanged
+eitherPathSegment :: String -> Either String PathSegment
+eitherPathSegment s = maybe (Left s) pure $ mkPathSegment s
+
 data Path = File | Directory
 data From = Root | Relative
 data FilePath (a :: From) (b :: Path) where
@@ -73,7 +94,6 @@ data FilePath (a :: From) (b :: Path) where
   FilePath      :: FilePath a Directory -> PathSegment -> FilePath a File
   DirectoryPath :: FilePath a Directory -> PathSegment -> FilePath a Directory
 
-
 instance Eq (FilePath a b) where
     RootPath == RootPath = True
     RelativePath == RelativePath = True
@@ -81,6 +101,37 @@ instance Eq (FilePath a b) where
     DirectoryPath a b == DirectoryPath c d = a == c && b == d
     _ == _ = False
 
+data FilePathParseError = InvalidPathSegments String (NonEmpty String) deriving (Show, Eq)
+
+filePathParseError
+    :: (String -> NonEmpty String -> a)   -- ^ A function to handle the case where the some path segments contained invalid characters
+    -> FilePathParseError
+    -> a
+filePathParseError badSegments e = case e of
+    InvalidPathSegments s ps  -> badSegments s ps
+
+-- |
+-- For cases where you dont know during compile time what kind of path you will get, for instance when you are parsing a path from the command line
+--
+data WeakFilePath (a :: Path) =
+        WeakRoot (FilePath Root a)
+    |   WeakRelative (FilePath Relative a)
+        deriving (Show, Eq)
+
+weakFilePath
+    :: (FilePath Root a -> b)       -- ^ The handler for when a Root filepath was found
+    -> (FilePath Relative a -> b)   -- ^ The handler for when a Relative filepath was found
+    -> WeakFilePath a
+    -> b
+weakFilePath root relative p = case p of
+    WeakRoot p'     -> root p'
+    WeakRelative p' -> relative p'
+
+rootFromWeak :: WeakFilePath a -> Maybe (FilePath Root a)
+rootFromWeak = weakFilePath pure (const Nothing)
+
+relativeFromWeak :: WeakFilePath a -> Maybe (FilePath Relative a)
+relativeFromWeak = weakFilePath (const Nothing) pure
 
 -- Path API
 rootPath :: FilePath Root Directory
@@ -95,8 +146,47 @@ p </> RelativePath = p
 p </> (DirectoryPath u s) = DirectoryPath (p </> u) s
 p </> (FilePath u s) = FilePath (p </> u) s
 
+
+-- |
+-- Takes in a string that is intended to represent a relative path or a root path down the filesystem tree
+-- splits on '/'
+--
+parseDirectory :: String -> Either FilePathParseError (WeakFilePath Directory)
+parseDirectory ('/':s) =
+    let
+        errorHandler :: FilePathParseError -> FilePathParseError
+        errorHandler (InvalidPathSegments s' ps) = InvalidPathSegments ('/':s') ps
+    in first errorHandler (parseDirectory s) >>= weakFilePath
+        (pure . WeakRoot)
+        (pure . WeakRoot . (rootPath </>))
+parseDirectory "" = pure $ WeakRelative relativePath
+parseDirectory s =
+    let
+        (badSegments, segments) = partitionEithers $ eitherPathSegment <$> wordsBy (== '/') s
+        relative :: FilePath Relative Directory
+        relative = foldl (\p s' -> p </> mkDirPathSeg s') relativePath segments
+    in maybe (pure $ WeakRelative relative) (Left . InvalidPathSegments s) $ nonEmpty badSegments
+
+-- |
+-- Takes in a string that is intended to represent a relative path or a root path down the filesystem tree
+-- splits on '/'
+--
+parseFilePath :: String -> Either FilePathParseError (WeakFilePath File)
+parseFilePath s =
+    let
+        dirErrorHandler :: String -> FilePathParseError -> FilePathParseError
+        dirErrorHandler fn (InvalidPathSegments _ ps) = maybe (InvalidPathSegments s $ ps <> pure fn) (const $ InvalidPathSegments s ps) $ mkPathSegment fn
+    in do
+        let ps' = splitOn "/" s
+        ps <- maybe (Left $ InvalidPathSegments s $ pure "") pure $ nonEmpty ps'-- This can't actually be empty but the type of `splitOn` is stupid
+        dirResult <- first (dirErrorHandler $ last ps) $ parseDirectory $ intercalate "/" $ init ps
+        fnRes <- maybe (Left $ InvalidPathSegments s $ pure $ last ps) pure $ fmap mkFilePathSeg $ mkPathSegment $ last ps
+        return $ weakFilePath (WeakRoot . (</> fnRes)) (WeakRelative . (</> fnRes)) dirResult
+
+{-# DEPRECATED mkDirPath "Please use `fmap mkDirPathSeg . mkPathSegment` instead" #-}
 -- | Smart constructor for directories.  Valid directories must be valid
 -- PathSegments and also cannot be empty strings.
+--
 mkDirPath :: String -> Maybe (FilePath Relative Directory)
 mkDirPath = fmap mkDirPathSeg . mkPathSegment
 
@@ -107,34 +197,14 @@ mkDirPath = fmap mkDirPathSeg . mkPathSegment
 mkDirPathSeg :: PathSegment -> FilePath Relative Directory
 mkDirPathSeg = DirectoryPath relativePath
 
+{-# DEPRECATED mkFilePath "Please use `fmap mkFilePathSeg . mkPathSegment` instead" #-}
 -- | Smart constructor for files.  Valid files must be valid PathSegments and
 -- also cannot be empty strings.
 mkFilePath :: String -> Maybe (FilePath Relative File)
-mkFilePath = fmap mkFilePathSeg .  mkPathSegment
+mkFilePath = fmap mkFilePathSeg . mkPathSegment
 
 mkFilePathSeg :: PathSegment -> FilePath Relative File
 mkFilePathSeg = FilePath relativePath
-
-mkRootFilePathBase :: String -> Maybe (FilePath Root Directory)
-mkRootFilePathBase ('/':s) = do
-  ys <- xs
-  return $ foldl (</>) RootPath ys
-  where
-    ss = splitOn "/" s
-    xs = mapM mkDirPath $ filter (not . null) ss
-mkRootFilePathBase _ = Nothing -- all full file paths must start from /
-
-
-mkFullFilePath :: String -> Maybe (FilePath Root File)
-mkFullFilePath ('/':s) = do
-  y <- x
-  ys <- xs
-  return $ foldl (</>) RootPath ys </> y
-  where
-    ss = splitOn "/" s
-    xs = mapM mkDirPath $ init ss
-    x  = mkFilePath $ last ss
-mkFullFilePath _ = Nothing -- all full file paths must start from /
 
 dirname :: FilePath a File -> FilePath a Directory
 dirname (FilePath dir _) = dir
@@ -144,6 +214,15 @@ basename (FilePath _ (PathSegment bname)) = bname
 
 basenameSeg :: FilePath a File -> PathSegment
 basenameSeg (FilePath _ bname) = bname
+
+segments :: FilePath a b -> [PathSegment]
+segments =
+    let
+        segments' :: FilePath a b -> [PathSegment]
+        segments' RootPath = []
+        segments' RelativePath = []
+        segments' (DirectoryPath u seg) = seg : segments' u
+    in reverse . segments'
 
 showp :: FilePath a b -> String
 showp RootPath = ""
@@ -295,3 +374,4 @@ deriving instance Typeable Root
 deriving instance Typeable File
 deriving instance Typeable FilePath
 #endif
+
