@@ -1,5 +1,5 @@
 name:                data-filepath
-version:             2.1.1.0
+version:             2.2.0.0
 synopsis:            A type safe file path data structure
 description:         A type safe file path data structure
 license:             BSD3
