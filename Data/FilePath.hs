@@ -231,8 +231,8 @@ showp p = showPath p
     showPath :: FilePath a b -> String
     showPath RootPath = ""
     showPath RelativePath = "."
-    showPath (DirectoryPath u s) = showPath u ++ "/" ++ s
-    showPath (FilePath u s)      = showPath u ++ "/" ++ s
+    showPath (DirectoryPath u (PathSegment s)) = showPath u ++ "/" ++ s
+    showPath (FilePath u (PathSegment s))      = showPath u ++ "/" ++ s
 
 -- TODO: could it split the delimiters?
 segQ :: QuasiQuoter
