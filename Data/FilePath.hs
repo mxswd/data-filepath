@@ -225,10 +225,14 @@ segments =
     in reverse . segments'
 
 showp :: FilePath a b -> String
-showp RootPath = ""
-showp RelativePath = "."
-showp (DirectoryPath u (PathSegment s)) = showp u ++ "/" ++ s
-showp (FilePath u (PathSegment s)) = showp u ++ "/" ++ s
+showp RootPath = "/"
+showp p = showPath p
+  where
+    showPath :: FilePath a b -> String
+    showPath RootPath = ""
+    showPath RelativePath = "."
+    showPath (DirectoryPath u s) = showPath u ++ "/" ++ s
+    showPath (FilePath u s)      = showPath u ++ "/" ++ s
 
 -- TODO: could it split the delimiters?
 segQ :: QuasiQuoter
