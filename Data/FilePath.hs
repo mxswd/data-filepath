@@ -45,6 +45,7 @@ import Data.List.Split ( splitOn, wordsBy )
 import Data.List.NonEmpty ( NonEmpty(..), init, last, nonEmpty )
 import Data.Maybe ( fromJust )
 import Data.Semigroup ( Semigroup(..) )
+import Data.String
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
 import GHC.Types
@@ -132,6 +133,28 @@ rootFromWeak = weakFilePath pure (const Nothing)
 
 relativeFromWeak :: WeakFilePath a -> Maybe (FilePath Relative a)
 relativeFromWeak = weakFilePath (const Nothing) pure
+
+instance IsString (FilePath 'Root 'Directory) where
+  fromString ('/':rest) = case rest of
+      [] -> RootPath
+      path -> DirectoryPath RootPath (PathSegment path)
+  fromString p = error $ "could not parse path: " <> p
+
+instance IsString (FilePath 'Root 'File) where
+  fromString input@('/':rest) = case rest of
+      [] -> error $ "only root path given, also expected a File" ++ input
+      path -> FilePath RootPath (PathSegment path)
+  fromString p = error $ "could not parse path: " <> p
+
+instance IsString (FilePath 'Relative 'Directory) where
+  fromString ('.':[]) = RelativePath
+  fromString input@('/':_) = error $ "Root path given, expected Relative: " ++ input
+  fromString (p:path) = case last (p:|path) of
+      '/' -> error $ "File expected, but a Directory (ending with a slash) was given" ++ path
+      _   -> DirectoryPath RelativePath (PathSegment path)
+
+instance IsString (FilePath 'Relative 'File) where
+  fromString path = FilePath RelativePath (PathSegment path)
 
 -- Path API
 rootPath :: FilePath Root Directory
