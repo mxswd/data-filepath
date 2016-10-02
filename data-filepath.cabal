@@ -1,5 +1,5 @@
 name:                data-filepath
-version:             2.2.0.0
+version:             2.2.0.1
 synopsis:            A type safe file path data structure
 description:         A type safe file path data structure
 license:             BSD3
@@ -21,9 +21,9 @@ source-repository       head
 library
   exposed-modules:      Data.FilePath
   other-extensions:     CPP, GADTs, DataKinds, KindSignatures, StandaloneDeriving, RankNTypes, DeriveDataTypeable, FlexibleInstances, MagicHash
-  build-depends:        base                >= 4.6 && < 4.9
-                    ,   bifunctors          == 4.2.*
-                    ,   semigroups          == 0.16.*
+  build-depends:        base                >= 4.6 && < 4.10
+                    ,   bifunctors          < 6.0
+                    ,   semigroups          < 0.19
                     ,   split               >= 0.2 && < 0.3
                     ,   template-haskell
                     ,   ghc-prim
